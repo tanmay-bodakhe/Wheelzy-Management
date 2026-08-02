@@ -1,0 +1,92 @@
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL STYLES — BIKE RENTAL MANAGER
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-primary: #07090f;
+  --bg-secondary: #0c1018;
+  --bg-card: #101520;
+  --bg-card-hover: #141b27;
+  --bg-input: #0c1422;
+  --bg-input-focus: #0e1929;
+
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --accent-green: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-indigo: #6366f1;
+
+  --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  --gradient-card: linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(139,92,246,0.04) 100%);
+
+  --text-primary: #eef2ff;
+  --text-secondary: #94a3b8;
+  --text-muted: #4b5563;
+
+  --border-default: rgba(148,163,184,0.1);
+  --border-focus: rgba(59,130,246,0.55);
+  --border-hover: rgba(59,130,246,0.28);
+
+  --shadow-card: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+  --shadow-btn: 0 4px 20px rgba(59,130,246,0.4);
+  --shadow-glow: 0 0 40px rgba(59,130,246,0.15);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.35); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(139,92,246,0.55); }
+
+/* ── Keyframes ─────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes floatOrb {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(50px, 70px) scale(1.1); }
+}
+@keyframes pulseBike {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50%       { transform: scale(1.08) rotate(2deg); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes toastSlide {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
+}
