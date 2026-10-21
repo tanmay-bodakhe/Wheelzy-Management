@@ -16,6 +16,11 @@ import { Login }           from './components/Login';
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isResetMode, setIsResetMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.hash.includes('type=recovery') ||
+           new URLSearchParams(window.location.search).get('type') === 'recovery';
+  });
   const { records, loading, addRecord, updateRecord, deleteRecord, clearAll, stats } = useRecords(user);
   const { toasts, showToast } = useToast();
   const [showRecords, setShowRecords]     = useState(false);
@@ -23,24 +28,50 @@ export default function App() {
 
   // Monitor Supabase Auth State
   useEffect(() => {
+    // 1. Check if stored hardcoded session exists
+    try {
+      const stored = localStorage.getItem('wheelzy_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.isHardcoded) {
+          setUser(parsed);
+          setAuthChecked(true);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     if (!isSupabaseConfigured()) {
       setAuthChecked(true);
       return;
     }
 
+    // 2. Check if recovery hash is in URL
+    if (window.location.hash.includes('type=recovery')) {
+      setIsResetMode(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      setUser(prev => (prev?.isHardcoded ? prev : (session?.user ?? null)));
       setAuthChecked(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResetMode(true);
+      }
+      setUser(prev => (prev?.isHardcoded ? prev : (session?.user ?? null)));
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   async function handleLogout() {
+    localStorage.removeItem('wheelzy_auth_user');
+    setUser(null);
+    setIsResetMode(false);
     if (supabase) {
       await supabase.auth.signOut();
       showToast('🔒 Logged out successfully', 'info');
@@ -73,6 +104,28 @@ export default function App() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <span className="spinner" style={{ width: '40px', height: '40px' }} />
       </div>
+    );
+  }
+
+  // If in Password Reset Mode (e.g. user clicked recovery link in email)
+  if (isResetMode) {
+    return (
+      <>
+        <div className="bg-orbs" aria-hidden="true">
+          <div className="orb orb-1" />
+          <div className="orb orb-2" />
+        </div>
+        <Login
+          initialMode="reset"
+          onAuthSuccess={(u) => {
+            setUser(u);
+            setIsResetMode(false);
+          }}
+          onResetComplete={() => setIsResetMode(false)}
+          showToast={showToast}
+        />
+        <ToastContainer toasts={toasts} />
+      </>
     );
   }
 

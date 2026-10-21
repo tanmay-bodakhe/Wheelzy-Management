@@ -9,7 +9,7 @@ export function useRecords(user) {
 
   // Load records
   const fetchRecords = useCallback(async () => {
-    if (!isSupabaseConfigured() || !user) {
+    if (!isSupabaseConfigured() || !user || user.isHardcoded) {
       // Local fallback
       try {
         const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -80,7 +80,7 @@ export function useRecords(user) {
   };
 
   const addRecord = useCallback(async (record, aadharFile, dlFile) => {
-    if (!isSupabaseConfigured() || !user) {
+    if (!isSupabaseConfigured() || !user || user.isHardcoded) {
       // Local fallback
       setRecords(prev => {
         const next = [record, ...prev];
@@ -142,7 +142,7 @@ export function useRecords(user) {
   }, [user, fetchRecords]);
 
   const updateRecord = useCallback(async (id, updatedData) => {
-    if (!isSupabaseConfigured() || !user) {
+    if (!isSupabaseConfigured() || !user || user.isHardcoded) {
       // Local fallback
       setRecords(prev => {
         const next = prev.map(r => r.id === id ? { ...r, ...updatedData } : r);
@@ -173,7 +173,7 @@ export function useRecords(user) {
   }, [user, fetchRecords]);
 
   const deleteRecord = useCallback(async (id) => {
-    if (!isSupabaseConfigured() || !user) {
+    if (!isSupabaseConfigured() || !user || user.isHardcoded) {
       // Local fallback
       setRecords(prev => {
         const next = prev.filter(r => r.id !== id);
@@ -198,7 +198,7 @@ export function useRecords(user) {
   }, [user, fetchRecords]);
 
   const clearAll = useCallback(async () => {
-    if (!isSupabaseConfigured() || !user) {
+    if (!isSupabaseConfigured() || !user || user.isHardcoded) {
       // Local fallback
       setRecords([]);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
