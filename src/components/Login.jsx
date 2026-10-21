@@ -7,15 +7,33 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
 
-  // Sync mode if initialMode changes
+  // Sync mode if initialMode changes or if URL hash contains reset
   useEffect(() => {
-    setMode(initialMode);
+    if (initialMode) setMode(initialMode);
+    if (typeof window !== 'undefined') {
+      if (window.location.hash.includes('reset') || window.location.hash.includes('recovery')) {
+        setMode('reset');
+      }
+    }
   }, [initialMode]);
+
+  // Check if there is an active Supabase user session (e.g. from recovery link)
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setHasActiveSession(true);
+        if (session.user.email) setEmail(session.user.email);
+      }
+    });
+  }, [mode]);
 
   // Resend countdown timer
   useEffect(() => {
@@ -88,7 +106,7 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
 
   // ── Handle Forgot Password (Send Reset Link) ──────────────────────────────
   async function handleForgotPassword(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       showToast('⚠️ Please enter your registered email address!', 'error');
@@ -102,7 +120,8 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
         throw new Error('Supabase client is not initialized.');
       }
 
-      const redirectUrl = window.location.origin;
+      // Include #reset-password in the redirect so the client always lands in reset mode
+      const redirectUrl = `${window.location.origin}/#reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: redirectUrl,
@@ -112,7 +131,7 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
 
       setResetSent(true);
       setResendCooldown(60);
-      showToast(`📬 Reset link sent to ${cleanEmail}!`, 'success');
+      showToast(`📬 Fresh reset link sent to ${cleanEmail}!`, 'success');
     } catch (error) {
       showToast(`❌ Failed to send reset email: ${error.message}`, 'error');
     } finally {
@@ -143,6 +162,17 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
         throw new Error('Supabase client is not initialized.');
       }
 
+      // If OTP code is entered and no active session
+      if (otpCode.trim() && !hasActiveSession) {
+        const { error: otpError } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: otpCode.trim(),
+          type: 'recovery',
+        });
+        if (otpError) throw otpError;
+      }
+
+      // Update password
       const { data, error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -163,7 +193,7 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
         onResetComplete();
       }
     } catch (error) {
-      showToast(`❌ Reset Failed: ${error.message}`, 'error');
+      showToast(`❌ Reset Failed: ${error.message}. Try requesting a fresh reset link below.`, 'error');
     } finally {
       setLoading(false);
     }
@@ -179,7 +209,7 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
       position: 'relative',
       zIndex: 10
     }}>
-      <div className="form-card" style={{ maxWidth: '420px', width: '100%', animation: 'fadeUp 0.35s ease' }}>
+      <div className="form-card" style={{ maxWidth: '440px', width: '100%', animation: 'fadeUp 0.35s ease' }}>
         
         {/* Card Header */}
         <div className="form-card-header" style={{ textAlign: 'center' }}>
@@ -196,14 +226,83 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
           />
           <h2 className="form-card-title" style={{ fontSize: '24px' }}>
             {mode === 'login' && 'Wheelzy Sign In'}
-            {mode === 'forgot' && 'Reset Password'}
+            {mode === 'forgot' && 'Reset Password Link'}
             {mode === 'reset' && 'Set New Password'}
           </h2>
           <p className="form-card-sub">
             {mode === 'login' && 'Authorized admin access only'}
-            {mode === 'forgot' && 'We’ll email you a secure link to reset your password'}
-            {mode === 'reset' && 'Create a new secure password for your account'}
+            {mode === 'forgot' && 'Enter your registered email to receive a recovery link'}
+            {mode === 'reset' && 'Create your new password to regain account access'}
           </p>
+        </div>
+
+        {/* ── Mode Navigation Tabs ─────────────────────────────────────── */}
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.04)',
+          borderRadius: '10px',
+          padding: '4px',
+          marginBottom: '20px',
+          border: '1px solid var(--border-default)',
+          gap: '4px'
+        }}>
+          <button
+            type="button"
+            onClick={() => setMode('login')}
+            style={{
+              flex: 1,
+              padding: '8px 6px',
+              borderRadius: '7px',
+              border: 'none',
+              background: mode === 'login' ? 'var(--accent-blue)' : 'transparent',
+              color: mode === 'login' ? '#fff' : 'var(--text-secondary)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            🔐 Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('forgot')}
+            style={{
+              flex: 1,
+              padding: '8px 6px',
+              borderRadius: '7px',
+              border: 'none',
+              background: mode === 'forgot' ? 'var(--accent-blue)' : 'transparent',
+              color: mode === 'forgot' ? '#fff' : 'var(--text-secondary)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            📨 Send Link
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('reset')}
+            style={{
+              flex: 1,
+              padding: '8px 6px',
+              borderRadius: '7px',
+              border: 'none',
+              background: mode === 'reset' ? 'var(--accent-blue)' : 'transparent',
+              color: mode === 'reset' ? '#fff' : 'var(--text-secondary)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            🔑 Set Password
+          </button>
         </div>
 
         {/* ── Mode 1: Login Form ────────────────────────────────────────── */}
@@ -285,6 +384,24 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
               {loading ? <span className="spinner" /> : '🔐'}
               {loading ? 'Signing In...' : 'Sign In'}
             </button>
+
+            <div style={{ textAlign: 'center', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setMode('reset')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: '4px'
+                }}
+              >
+                Already have a reset link? Set New Password →
+              </button>
+            </div>
           </form>
         )}
 
@@ -302,42 +419,35 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
               }}>
                 <div style={{ fontSize: '36px', marginBottom: '10px' }}>📬</div>
                 <h3 style={{ fontSize: '17px', color: '#34d399', margin: '0 0 8px 0', fontWeight: 700 }}>
-                  Reset Link Sent!
+                  Reset Link Dispatched!
                 </h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
-                  We have dispatched a password recovery link to:
+                  A fresh recovery link was sent to:
                   <br />
                   <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
                 </p>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px 0' }}>
-                  Please check your inbox (and spam/junk folder). Click the link in that email to set your new password.
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px 0', lineHeight: 1.4 }}>
+                  Check your inbox and spam folder. Click the link in that email to create your new password.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <button
                     type="button"
-                    className="btn-secondary"
-                    disabled={loading || resendCooldown > 0}
-                    onClick={handleForgotPassword}
+                    className="btn-primary"
+                    onClick={() => setMode('reset')}
                     style={{ justifyContent: 'center', width: '100%', fontSize: '13px' }}
                   >
-                    {resendCooldown > 0 ? `Resend email in ${resendCooldown}s` : 'Resend Reset Email'}
+                    🔑 Clicked the email link? Set New Password
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => { setResetSent(false); setMode('login'); }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent-blue)',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      fontWeight: 600
-                    }}
+                    className="btn-secondary"
+                    disabled={loading || resendCooldown > 0}
+                    onClick={handleForgotPassword}
+                    style={{ justifyContent: 'center', width: '100%', fontSize: '12px' }}
                   >
-                    ← Back to Sign In
+                    {resendCooldown > 0 ? `Resend email in ${resendCooldown}s` : 'Resend Link'}
                   </button>
                 </div>
               </div>
@@ -369,46 +479,58 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
                   {loading ? <span className="spinner" /> : '📨'}
                   {loading ? 'Sending Recovery Link...' : 'Send Reset Link'}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    padding: '6px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  ← Back to Sign In
-                </button>
               </form>
             )}
           </div>
         )}
 
-        {/* ── Mode 3: Set New Password Form (From Recovery Link) ────────── */}
+        {/* ── Mode 3: Set New Password Form ────────────────────────────── */}
         {mode === 'reset' && (
           <form className="form-body" onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.2)',
-              borderRadius: '8px',
-              padding: '10px 12px',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <span>🔑</span>
-              <span>Authenticated recovery session detected. Choose your new password.</span>
+            
+            {hasActiveSession ? (
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '12px',
+                color: '#34d399',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>✅</span>
+                <span>Verified recovery session detected for <strong>{email || 'your account'}</strong>.</span>
+              </div>
+            ) : (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.4
+              }}>
+                <span>💡 Clicked the email link or have a code? Type your new password below. If the link expired, click <strong>Send Link</strong> above.</span>
+              </div>
+            )}
+
+            <div className="field">
+              <label className="field-label">Registered Email</label>
+              <div className="input-wrap">
+                <span className="input-icon">✉️</span>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="admin@wheelzy.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
             </div>
 
             <div className="field">
@@ -461,6 +583,25 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
               </div>
             </div>
 
+            {!hasActiveSession && (
+              <div className="field">
+                <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Reset Code / OTP (optional)</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>If received in email</span>
+                </label>
+                <div className="input-wrap">
+                  <span className="input-icon">🔢</span>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. 123456 (leave blank if clicked link)"
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               className="btn-primary"
@@ -468,27 +609,40 @@ export function Login({ onAuthSuccess, showToast, initialMode = 'login', onReset
               style={{ justifyContent: 'center', width: '100%', marginTop: '6px' }}
             >
               {loading ? <span className="spinner" /> : '💾'}
-              {loading ? 'Updating Password...' : 'Save New Password & Log In'}
+              {loading ? 'Saving...' : 'Save New Password & Sign In'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (onResetComplete) onResetComplete();
-                setMode('login');
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                fontSize: '13px',
-                cursor: 'pointer',
-                padding: '6px',
-                textAlign: 'center'
-              }}
-            >
-              Cancel / Back to Sign In
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setMode('forgot')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0
+                }}
+              >
+                ← Request fresh link
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('login')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  padding: 0
+                }}
+              >
+                Back to Sign In
+              </button>
+            </div>
           </form>
         )}
 

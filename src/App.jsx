@@ -18,8 +18,9 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isResetMode, setIsResetMode] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return window.location.hash.includes('type=recovery') ||
-           new URLSearchParams(window.location.search).get('type') === 'recovery';
+    const h = window.location.hash;
+    const s = window.location.search;
+    return h.includes('type=recovery') || h.includes('reset') || s.includes('code=') || s.includes('recovery');
   });
   const { records, loading, addRecord, updateRecord, deleteRecord, clearAll, stats } = useRecords(user);
   const { toasts, showToast } = useToast();
@@ -48,8 +49,34 @@ export default function App() {
       return;
     }
 
-    // 2. Check if recovery hash is in URL
-    if (window.location.hash.includes('type=recovery')) {
+    const rawHash = window.location.hash;
+    const rawSearch = window.location.search;
+    const searchParams = new URLSearchParams(rawSearch);
+
+    // 2. Check for expired or invalid link errors from Supabase
+    if (rawHash.includes('error=') || rawSearch.includes('error=')) {
+      let desc = searchParams.get('error_description');
+      if (!desc && rawHash.includes('error_description=')) {
+        const match = rawHash.match(/error_description=([^&]+)/);
+        if (match) desc = decodeURIComponent(match[1].replace(/\+/g, ' '));
+      }
+      showToast(`⚠️ ${desc || 'Reset link expired or invalid. Please request a new one.'}`, 'error');
+    }
+
+    // 3. Handle PKCE code in URL (?code=...)
+    const code = searchParams.get('code');
+    if (code && supabase) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data?.session) {
+          setUser(data.session.user);
+          setIsResetMode(true);
+          showToast('🔑 Link verified! Please set your new password.', 'info');
+        }
+      });
+    }
+
+    // 4. Check if recovery hash is in URL
+    if (rawHash.includes('type=recovery') || rawHash.includes('reset') || rawHash.includes('access_token')) {
       setIsResetMode(true);
     }
 
